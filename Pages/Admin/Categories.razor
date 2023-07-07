@@ -1,0 +1,173 @@
+@page "/admin/categories"
+@using LampStore.Models.ProductsPages
+@inherits OwningComponentBase<ICategoryRepository>
+@inject IPopupNotification popupNotification
+@inject IFolderManager folderManager
+
+<Confirmation @ref="confirmation" OnCancel="OnCancel" OnConfirm="OnConfirm" IsConfirm="confirmationCheckOnDelete"
+	Title="Удаление категории...">
+	<div class="toast-body">
+		@confirmationText
+	</div>
+</Confirmation>
+<div class="admin-notification__wrapper">
+	<Popup ListNotifications="popupNotification.ListNotifications" />
+</div>
+
+@if (loading)
+{
+	<div class="lds-spinner">
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+</div>
+}
+else
+{
+
+<table class="table table-sm table-striped table-bordered">
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Название категории</th>
+			<th>Изображение</th>
+			<th>ID родительской категории</th>
+			<th>Описание категории</th>
+			<th>Количество товаров</th>
+			<th>Показывать на главной</th>
+			<th>Опубликована</th>
+			<th>Title</th>
+			<th>Description</th>
+			<td />
+		</tr>
+	</thead>
+	<tbody>
+		@if (CategoryData?.Count() > 0)
+		{
+			@foreach (Category c in CategoryData)
+			{
+				<tr>
+					<td>@c.Id</td>
+					<td>@c.CategoryName</td>
+					<td><img class="img-fluid" style="height: 80px;" src=@c.CategoryImg></td>
+					<td>@c.ParentId</td>
+					<td>@c.Description</td>
+					<td>@Products.Where(p => p.CategoryId == c.Id).Count()</td>
+					<td>@c.DisplayHomePage</td>
+					<td>@c.IsPublished</td>
+					<td>@c.MetaData.Title</td>
+					<td>@c.MetaData.Description</td>
+					<td class="text-center">
+						<NavLink class="btn btn-warning btn-sm" href="@GetEditUrl(c.Id)">
+							Изменить
+						</NavLink>
+						<button class="btn btn-danger btn-sm" @onclick="@(e => DeleteCategory(c))">
+							Удалить
+						</button>
+					</td>
+				</tr>
+			}
+		}
+		else
+		{
+			<tr>
+				<td colspan="5" class="text-center">Категории, не найдены.</td>
+			</tr>
+		}
+	</tbody>
+</table>
+}
+<NavLink class="btn btn-primary" href="/admin/categories/create">Добавить</NavLink>
+
+@code {
+	public ICategoryRepository Repository => Service;
+	public IEnumerable<Category> CategoryData { get; set; } = Enumerable.Empty<Category>();
+
+	public List<Product> Products { get; set; } = new();
+
+	private bool loading = false;
+
+	protected override async Task OnInitializedAsync()
+	{	
+		try
+		{
+			loading = true;
+			await UpdateData();
+			loading = false;
+		}
+		catch (InvalidOperationException ex)
+		{
+			Console.WriteLine("Исключение InvalidOperationException Orders: " + ex.Message);
+			loading = true;
+			await UpdateData();
+			loading = false;
+		}
+	}
+
+	public async Task UpdateData()
+	{
+		Products = await Repository.Products.Select(p => p).ToListAsync();
+		CategoryData = await Repository.Category.Select(c => c).ToListAsync();
+	}
+
+	public void DeleteCategory(Category category)
+	{
+		var CheckedProductsInCategory = Products.Where(p => p.CategoryId == category.Id).ToList();
+		if (CheckedProductsInCategory?.Count > 0)
+		{
+			confirmationCheckOnDelete = false;
+			confirmationText = $"В категории {category.CategoryName} есть товары, удаление невозможно. Перенести товары в другую категорию и повторите попытку.";
+		}
+		else
+		{
+			confirmationCheckOnDelete = true;
+			confirmationText = $"Вы уверены что хотите удалить категорию {category.CategoryName}?";
+		}
+		CategoryToBeDelete = category;
+		confirmation?.Show();
+	}
+
+	public string GetEditUrl(long id) => $"/admin/categories/edit/{id}";
+}
+
+@code {
+	Confirmation? confirmation;
+	private Category? CategoryToBeDelete { get; set; }
+	private string confirmationText = string.Empty;
+	private bool confirmationCheckOnDelete;
+	private string urlPath = "wwwroot/imegs/img-category/";
+	private async Task OnConfirm()
+	{
+		if (CategoryToBeDelete != null && confirmationCheckOnDelete)
+		{
+			folderManager.DeleteDirectory(urlPath + CategoryToBeDelete.Id);
+			Repository.DeleteCategory(CategoryToBeDelete);
+			confirmation?.Hide();
+			Notification notification = new Notification(1, "Удаление категории", "Удалена категория", CategoryToBeDelete.CategoryName);
+			popupNotification.AddItem(notification);
+			CategoryToBeDelete = null;
+			await UpdateData();
+		}
+	}
+
+	private void OnCancel()
+	{
+		Notification notification = new Notification(1, "Отмена удаления", "Отменено удаление категории", CategoryToBeDelete?.CategoryName);
+		if (!confirmationCheckOnDelete)
+		{
+			notification = new Notification(1, "Ошибка удаления категории", "Невозможно удалить категорию", CategoryToBeDelete?.CategoryName);
+		}
+		confirmation?.Hide();
+		popupNotification.AddItem(notification);
+		CategoryToBeDelete = null;
+	}
+}

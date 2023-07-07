@@ -1,0 +1,162 @@
+@page "/admin/cooperation/{CurrentPage:int?}"
+@inherits OwningComponentBase<ICooperationRepository>
+@inject IPopupNotification PopupNotification
+@inject IFolderManager FolderManager
+@inject IPageStateService PageStateService
+
+<Confirmation @ref="confirmation" OnCancel="OnCancel" OnConfirm="OnConfirm" IsConfirm="true"
+	Title="Удаление страницы сотрудничество...">
+	<div class="toast-body">
+		Вы уверены что хотите удалить запись
+		@if (CooperationPageToBeDelete != null)
+		{
+			<p>@CooperationPageToBeDelete.NameCooperation ?</p>
+		}
+	</div>
+</Confirmation>
+<div class="admin-notification__wrapper">
+	<Popup ListNotifications="PopupNotification.ListNotifications" />
+</div>
+
+@if (loading)
+{
+	<div class="lds-spinner">
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+</div>
+}
+else
+{
+	<table class="table table-sm table-striped table-bordered">
+		<thead>
+		<tr>
+			<th>ID</th>
+			<th>Заголовок</th>
+			<th>Изображение</th>
+			<th>Описание странциы</th>
+			<th>Опубликовано</th>
+			<td />
+		</tr>
+		</thead>
+		<tbody>
+		@if (PageStateService.DisplayedNodes?.Count() > 0)
+		{
+			@foreach (var c in PageStateService.DisplayedNodes.Cast<Cooperation>())
+			{
+				<tr>
+					<td>@c.ID</td>
+					<td>@c.NameCooperation</td>
+					<td>
+						<img class="img-fluid" style="height: 80px;" src="@c.CooperationImg" alt=""></td>
+					<td>@c.MinDescription</td>
+					<td>@c.IsVisible</td>
+					<td class="text-center">
+						<NavLink class="btn btn-warning btn-sm" href="@GetEditUrl(c.ID)">
+							Изменить
+						</NavLink>
+						<button class="btn btn-danger btn-sm" @onclick="@(() => DeleteAboutPage(c))">
+							Удалить
+						</button>
+					</td>
+				</tr>
+			}
+		}
+		else
+		{
+			<tr>
+				<td colspan="5" class="text-center">Записи, не найдены.</td>
+			</tr>
+		}
+		</tbody>
+	</table>
+	<Pagination Url="@UrlPage" />
+}
+<NavLink class="btn btn-primary" href="/admin/cooperation/create">Добавить</NavLink>
+
+@code {
+	[Parameter]
+	public int CurrentPage { get; set; } = 1;
+	
+	private const string UrlPage = "/admin/cooperation/";
+	private const string UrlPath = "wwwroot/imegs/img-cooperation/";
+	
+	private ICooperationRepository Repository => Service;
+	private IList<Cooperation>? CooperationData { get; set; }
+	private bool loading;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			loading = true;
+			await UpdateData();
+			loading = false;
+		}
+		catch (InvalidOperationException ex)
+		{
+			Console.WriteLine("Исключение InvalidOperationException About: " + ex.Message);
+			loading = true;
+			await UpdateData();
+			loading = false;
+		}
+	}
+
+	private async Task UpdateData()
+	{
+		CooperationData = await Repository.Cooperations.ToListAsync();
+		PageStateServiceBuilder();
+	}
+	
+	private void PageStateServiceBuilder()
+	{
+		if (CooperationData is null) return;
+		PageStateService.Data = CooperationData.Cast<object>().ToList();
+		PageStateService.ChangePage(CurrentPage);
+	}
+
+	private void DeleteAboutPage(Cooperation сooperation)
+	{
+		CooperationPageToBeDelete = сooperation;
+		confirmation?.Show();
+	}
+
+	private string GetEditUrl(long id) => $"/admin/cooperation/edit/{id}";
+}
+
+@code {
+	Confirmation? confirmation;
+	private Cooperation? CooperationPageToBeDelete { get; set; }
+	private async Task OnConfirm()
+	{
+		if (CooperationPageToBeDelete != null)
+		{
+			FolderManager.DeleteDirectory(UrlPath + CooperationPageToBeDelete.ID);
+			Repository.DeleteCooperations(CooperationPageToBeDelete);
+			confirmation?.Hide();
+			Notification notification = new Notification(1, "Удаление записи", "Удалена страница сотрудничества",
+			CooperationPageToBeDelete.NameCooperation);
+			PopupNotification.AddItem(notification);
+			CooperationPageToBeDelete = null;
+			await UpdateData();
+		}
+	}
+
+	private void OnCancel()
+	{
+		confirmation?.Hide();
+		Notification notification = new Notification(1, "Отмена удаления", "Отменено удаление страницы сотрудничество",
+		CooperationPageToBeDelete!.NameCooperation);
+		PopupNotification.AddItem(notification);
+		CooperationPageToBeDelete = null;
+	}
+}

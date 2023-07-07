@@ -1,0 +1,152 @@
+@page "/admin/file-upload"
+@using System
+@using System.IO
+@using Microsoft.AspNetCore.Hosting
+@using Microsoft.Extensions.Logging
+@inject ILogger<FileUpload> Logger
+@inject IWebHostEnvironment Environment
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@using SixLabors.ImageSharp
+@using SixLabors.ImageSharp.Processing
+
+<h1>Upload Files</h1>
+
+<p>
+	<label>
+		Максимальный общий размер файлов: 50мб.
+		<input type="number" @bind="maxFileSize" />
+	</label>
+</p>
+
+<p>
+	<label>
+		максимальное колиечство файлов: 10шт.
+		<input type="number" @bind="maxAllowedFiles" />
+	</label>
+</p>
+
+<p>
+	<label>
+		Загрузить до @maxAllowedFiles файлов, размером до @maxFileSize байт:
+		<InputFile OnChange="@LoadFiles" multiple />
+		<li>@fileNameError</li>
+	</label>
+</p>
+
+@if (isLoading)
+{
+	<p>Progress: @string.Format("{0:P0}", progressPercent)</p>
+}
+else
+{
+	<ul>
+	@foreach (var file in loadedFiles)
+		{
+			<li>
+				<ul>
+					<li>Загрузка завершена</li>
+					<li>Имя файла: @file.Name</li>
+					<li>Размер в байтах: @file.Size</li>
+				</ul>
+			</li>
+		}
+	</ul>
+
+}
+
+
+@code {
+	private List<IBrowserFile> loadedFiles = new();
+	private long maxFileSize = 50 * (long)Math.Pow(2, 20);
+	private int maxAllowedFiles = 10;
+	private bool isLoading;
+	private decimal progressPercent;
+	private string path = string.Empty;
+
+	[Parameter]
+	public string UrlPath { get; set; } = "Files";
+
+	[Parameter]
+	public string FolderName { get; set; } = string.Empty;
+	private string fileNameError = string.Empty;
+
+	private List<FileInfo> pathFiles = new();
+
+	private async Task LoadFiles(InputFileChangeEventArgs e)
+	{
+		isLoading = true;
+		loadedFiles.Clear();
+		progressPercent = 0;
+
+		foreach (var file in e.GetMultipleFiles(maxAllowedFiles))
+		{
+			try
+			{
+				var trustedFileName = Path.GetRandomFileName();
+				path = Path.Combine(Environment.ContentRootPath,
+				"wwwroot", UrlPath + FolderName, file.Name);
+
+				if (File.Exists(path))
+				{
+					fileNameError = "Такое имя уже существует";
+				}
+				else
+				{
+					fileNameError = string.Empty;
+					await using FileStream writeStream = new(path, FileMode.Create);
+					using var readStream = file.OpenReadStream(maxFileSize);
+					var bytesRead = 0;
+					var totalRead = 0;
+					var buffer = new byte[1024 * 10];
+
+					while ((bytesRead = await readStream.ReadAsync(buffer)) != 0)
+					{
+						totalRead += bytesRead;
+
+						await writeStream.WriteAsync(buffer, 0, bytesRead);
+
+						progressPercent = Decimal.Divide(totalRead, file.Size);
+
+						StateHasChanged();
+					}
+
+					loadedFiles.Add(file);
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.LogError("File: {Filename} Error: {Error}",
+				file.Name, ex.Message);
+			}
+		}
+
+		isLoading = false;
+
+		if (!isLoading)
+		{
+			foreach (var file in loadedFiles)
+			{
+				await ResizePhotoAsync("wwwroot/" + UrlPath + FolderName + "/", file);
+			}
+		}
+	}
+
+	private async Task ResizePhotoAsync(string path, IBrowserFile file)
+	{
+		using (Image image = Image.Load(path + file.Name))
+		{
+			image.Mutate(x => x.Resize(image.Width / 2, image.Height / 2));
+			var fileName = Path.GetFileNameWithoutExtension(file.Name);
+			await image.SaveAsWebpAsync(path + "average/webp/" + fileName + ".webp");
+			await image.SaveAsync(path + "average/" + file.Name);
+		}
+		using (Image image = Image.Load(path + file.Name))
+		{
+			image.Mutate(x => x.Resize(image.Width / 1, image.Height / 1));
+			var fileName = Path.GetFileNameWithoutExtension(file.Name);
+			await image.SaveAsWebpAsync(path + "webp/" + fileName + ".webp");
+		}
+	}
+
+}

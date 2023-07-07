@@ -1,0 +1,31 @@
+@page "/info"
+@model Faq
+@{
+	Layout = "_Layout";
+	ViewData["Title"] = "Вопросы и ответы";
+	ViewData["Breadcrumb"] = await Component.InvokeAsync("BreadcrumbSummary", new[] { (url: "/", page: "Главная"),
+(url: "/faq", page: "Информация") });
+}
+
+<div class="col-12 mb-per-15 mt-10 pt-per-5" data-color-section="dark">
+	@if (@Model.DisplayInfoPages.Count() > 0)
+	{
+		@foreach (var infoPage in @Model.DisplayInfoPages.Where(i => i.IsAvailable == true))
+		{
+			<a asp-page="InfoPage" asp-route-ID="@infoPage.ID" class="scroll-m row justify-content-between align-items-xl-center border-b">
+				<div class="col-12 col-xl-5">
+					<div class="black-img__wrapper">
+						<div class="black-img">
+							<img class="black-img-faq-svg" src="@infoPage.SvgUrl">
+							<h4 class="black-img-faq-h">@infoPage.TextForBanner</h4>
+						</div>
+					</div>
+				</div>
+				<div class="col-12 col-xl-6 col-xs-12">
+					<h1 class="p__caption mb-per-5">@infoPage.NameInfo</h1>
+					<button asp-page="InfoPage" asp-route-ID="@infoPage.ID" class="a-btn-link">Подробнее</button>
+				</div>
+			</a>
+		}
+	}
+</div>

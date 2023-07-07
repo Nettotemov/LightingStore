@@ -1,0 +1,159 @@
+@page "/admin/products/details/{id:long}"
+@using System.Globalization
+@using LampStore.Models.CollectionsLights
+@using LampStore.Models.LightsModels
+@using LampStore.Models.ProductsPages
+@inject IPageStateService PageStateService
+
+<h3 class="bg-info text-white text-center p-1">Details</h3>
+<table class="table table-sm table-bordered table-striped">
+	<tbody>
+		<tr>
+			<th>ID</th>
+			<td>@Product?.Id</td>
+		</tr>
+		<tr>
+			<th>Артикул</th>
+			<td>@Product?.Artikul</td>
+		</tr>
+		<tr>
+			<th>Изображение</th>
+			<img class="img-fluid" style="height: 250px;" src=@Product?.MainPhoto>
+		</tr>
+		<tr>
+			<th>Галерея</th>
+			@if (DisplayedGallery?.Count() > 0)
+			{
+				@foreach (var img in @DisplayedGallery)
+				{
+					<img class="img-thumbnail col-2" src="@img">
+				}
+			}
+		</tr>
+		<tr>
+			<th>Название</th>
+			<td>@Product?.Name</td>
+		</tr>
+		<tr>
+			<th>Коллекция</th>
+			<td>@Product?.CollectionLight?.Name</td>
+		</tr>
+		<tr>
+			<th>Модeль</th>
+			<td>@Product?.ModelLight?.Name</td>
+		</tr>
+		<tr>
+			<th>Описание</th>
+			<td>@Product?.Description</td>
+		</tr>
+		<tr>
+			<th>Короткое описание</th>
+			<td>@Product?.MinDescription</td>
+		</tr>
+		<tr>
+			<th>Категория</th>
+			<td>@Product?.Category!.CategoryName</td>
+		</tr>
+		<tr>
+			<th>Цена</th>
+			<td>@Product?.Price.ToString("C", new CultureInfo("ru-RU"))</td>
+		</tr>
+		<tr>
+			<th>Скидка %</th>
+			<td>@Product?.Discount</td>
+		</tr>
+		<tr>
+			<th>Старая цена</th>
+			<td>@Product?.OldPrice?.ToString("C", new CultureInfo("ru-RU"))</td>
+		</tr>
+		<tr>
+			<th>Тип</th>
+			<td>@Product?.ProductType?.Name</td>
+		</tr>
+		<tr>
+			<th>Цвет</th>
+			<td>@Product?.Color</td>
+		</tr>
+		<tr>
+			<th>Материал</th>
+			<td>@Product?.Material</td>
+		</tr>
+		<tr>
+			<th>Цветовая температура</th>
+			<td>@Product?.Kelvins</td>
+		</tr>
+		<tr>
+			<th>Наличие</th>
+			<td>@Product?.Availability</td>
+		</tr>
+		<tr>
+			<th>Размер</th>
+			<td>@Product?.Size</td>
+		</tr>
+		<tr>
+			<th>Размер базы</th>
+			<td>@Product?.BaseSize</td>
+		</tr>
+		<tr>
+			<th>Длина шнура</th>
+			<td>@Product?.CordLength мм</td>
+		</tr>
+		<tr>
+			<th>Источник света</th>
+			<td>@Product?.LightSource</td>
+		</tr>
+		<tr>
+			<th>Мощность</th>
+			<td>@Product?.PowerW</td>
+		</tr>
+		<tr>
+			<th>Управление</th>
+			<td>@Product?.AddControl</td>
+		</tr>
+		<tr>
+			<th>Опубликован</th>
+			<td>@Product?.IsPublished</td>
+		</tr>
+		@* <tr>
+		<th>Теги</th>
+		<td>@Product?.ProductTags</td>
+		</tr> *@
+	</tbody>
+</table>
+
+<NavLink class="btn btn-warning" href="@EditUrl">Изменить</NavLink>
+<NavLink class="btn btn-secondary" href="@PreviousUrl">Назад</NavLink>
+
+@code
+{
+	[Inject]
+	public IStoreRepository? Repository { get; set; }
+
+	public List<Category>? DisplayedCategories { get; set; }
+	public List<ModelLight>? DisplayedModelsLights { get; set; }
+	public List<CollectionLight>? DisplayedCollectionsLights { get; set; }
+
+	[Parameter]
+	public long Id { get; set; }
+
+	public List<string>? DisplayedGallery { get; set; }
+
+	public Product? Product { get; set; }
+
+	protected override async Task OnInitializedAsync()
+	{
+		if (Repository != null)
+		{
+			Product = await Repository.Products.FirstOrDefaultAsync(p => p.Id == Id);
+			DisplayedCategories = await Repository.Category.Select(c => c).Distinct().ToListAsync(); //получение категорий
+			DisplayedModelsLights = await Repository.LightsModels.Select(m => m).Distinct().ToListAsync();
+			DisplayedCollectionsLights = await Repository.CollectionsModels.Select(m => m).Distinct().ToListAsync();
+		}
+		if (Product != null)
+		{
+			DisplayedGallery = Product.Photos.Split(", ").ToList();
+		}
+	}
+	public string EditUrl => $"/admin/products/edit/{Product?.Id}";
+	private string PreviousUrl => $"/admin/products/{PageStateService.CurrentPage}";
+}

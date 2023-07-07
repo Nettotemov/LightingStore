@@ -1,0 +1,35 @@
+@page "/collections"
+@model Collections
+
+@{
+	Layout = "_Layout";
+	ViewData["Title"] = "Коллекции светильников";
+	ViewData["Breadcrumb"] = await Component.InvokeAsync("BreadcrumbSummary", new[] { (url: "/", page: "Главная"),
+(url: "/collections", page: "Коллекции") });
+}
+
+
+<div class="col-12 mb-per-15 mt-10 pt-2" data-color-section="dark">
+	@if (Model.DisplayCollectionsPages is not null)
+	{
+		@foreach (var collection in Model.DisplayCollectionsPages)
+		{
+			<a asp-page="CollectionPage" asp-route-url="@collection.MetaData.Url"
+		  class="scroll-m row align-items-xl-center border-b mt-5">
+				<div class="col-12 col-xl-5">
+					<div class="img-cooperation__wrapper">
+						<div class="img-center__wrapper">
+							<img class="img-responsive" src="@collection.Img" alt="">
+						</div>
+					</div>
+				</div>
+				<div class="col-12 col-xl-6 col-xs-12 mt-4">
+					<h2 class="h1__caption mb-per-5 fw-bold">@collection.Name</h2>
+					<p class="p__caption mb-per-5">@collection.Description</p>
+					<button asp-page="CollectionPage" asp-route-url="@collection.MetaData.Url"
+						class="a-btn-link">Узнать больше</button>
+				</div>
+			</a>
+		}
+	}
+</div>

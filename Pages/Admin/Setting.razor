@@ -1,0 +1,230 @@
+@page "/admin/settings"
+@using System.ComponentModel.DataAnnotations
+@inherits OwningComponentBase<ISettingsRepository>
+@inject IPopupNotification PopupNotification
+
+<Confirmation @ref="confirmation" OnCancel="OnCancel" OnConfirm="OnConfirm" IsConfirm="true"
+	Title="Удаление страницы о компании...">
+	<div class="toast-body">
+		Вы уверены что хотите удалить настройку
+		@if (SettingToBeDelete != null)
+		{
+			<p>@SettingToBeDelete.NameSettings ?</p>
+		}
+	</div>
+</Confirmation>
+<div class="admin-notification__wrapper">
+	<Popup ListNotifications="PopupNotification.ListNotifications" />
+</div>
+
+
+@if (loading)
+{
+	<div class="lds-spinner">
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	</div>
+}
+else
+{
+	<table class="table table-sm table-striped table-bordered">
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Тип настройки</th>
+			<th>Название</th>
+			<th>Значение</th>
+			<th>Используется</th>
+			<td />
+		</tr>
+	</thead>
+	<tbody>
+		@if (SettingsData.Any())
+			{
+				@foreach (var s in SettingsData)
+				{
+					<tr>
+						<td>@s.Id</td>
+						<td>@s.Setting.GetDisplayName()</td>
+						<td>@s.NameSettings</td>
+						<td>@s.Value</td>
+						<td>@s.IsVisible</td>
+						<td class="text-center">
+							<button class="btn btn-info btn-sm" @onclick="@(() => ChangeSetting(s))">
+								Изменить
+							</button>
+							<button class="btn btn-danger btn-sm" @onclick="@(() => DeleteSetting(s))">
+								Удалить
+							</button>
+						</td>
+					</tr>
+				}
+			}
+			else
+			{
+				<tr>
+					<td colspan="5" class="text-center">Настройки, не найдены.</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+<EditForm Model="TemporarySettingsData" OnValidSubmit="SaveSetting">
+	<DataAnnotationsValidator />
+	@if (TemporarySettingsData.Id != 0)
+	{
+		<div class="form-group">
+			<label>ID</label>
+			<input class="form-control" disabled value="@TemporarySettingsData.Id" />
+		</div>
+	}
+	<div class="form-group">
+		<label>Тип Настройки</label>
+		<InputSelect class="form-select" @bind-Value="TemporarySettingsData.Setting">
+			@foreach (var setting in Enum.GetValues<TypeSettings>())
+			{
+				<option value="@setting">@setting.GetDisplayName()</option>
+			}
+		</InputSelect>
+	</div>
+	<div class="form-group">
+		<label>Название</label>
+		<ValidationMessage For="@(() => TemporarySettingsData.NameSettings)" />
+		<InputText class="form-control" @bind-Value="TemporarySettingsData.NameSettings" />
+	</div>
+	<div class="form-group">
+		<label>Значение</label>
+		<ValidationMessage For="@(() => TemporarySettingsData.Value)" />
+		<InputTextArea class="form-control" @bind-Value="TemporarySettingsData.Value" />
+	</div>
+	<div class="form-group">
+		<label>Используется</label>
+		<ValidationMessage For="@(() => TemporarySettingsData.IsVisible)" />
+		<InputCheckbox class="" @bind-Value="TemporarySettingsData.IsVisible" />
+	</div>
+	<div class="mt-2">
+		<button type="submit" class="btn btn-warning">Сохранить</button>
+		<button class="btn btn-secondary" @onclick="@(CancellationNewSetting)">Отмена</button>
+	</div>
+</EditForm>
+
+@code {
+	private ISettingsRepository Repository => Service;
+	private IEnumerable<Settings> SettingsData { get; set; } = Enumerable.Empty<Settings>();
+	private TemporarySettingsDataModel TemporarySettingsData { get; set; } = new();
+	private Settings NewSetting { get; set; } = new();
+
+	private bool loading;
+
+	protected override async Task OnInitializedAsync()
+	{
+		await UpdateDataAsync();
+	}
+
+	private async Task UpdateDataAsync()
+	{
+		loading = true;
+		SettingsData = await Repository.Settings.Select(s => s).ToListAsync();
+		loading = false;
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private void DeleteSetting(Settings settings)
+	{
+		SettingToBeDelete = settings;
+		confirmation?.Show();
+	}
+
+	private async Task SaveSetting()
+	{
+		NewSetting.Id = TemporarySettingsData.Id;
+		NewSetting.NameSettings = TemporarySettingsData.NameSettings;
+		NewSetting.Value = TemporarySettingsData.Value;
+		NewSetting.IsVisible = TemporarySettingsData.IsVisible;
+		NewSetting.Setting = TemporarySettingsData.Setting;
+		await CreateNewSetting();
+	}
+
+	private async Task CreateNewSetting()
+	{
+		if (NewSetting.Id == 0)
+		{
+			await Repository.CreateSettingsAsync(NewSetting);
+			PopupNotification.CreateNotification("Настройка сохранена", "Запись настройки добавлена",
+				NewSetting.NameSettings);
+		}
+		else
+		{
+			await Repository.SaveSettingsAsync(NewSetting);
+			PopupNotification.CreateNotification("Изменения сохранены", "Настройка изменена", NewSetting.Id.ToString());
+		}
+		CancellationNewSetting();
+		await UpdateDataAsync();
+	}
+
+	private void ChangeSetting(Settings setting)
+	{
+		NewSetting = Repository.Settings.FirstOrDefault(s => s.Id == setting.Id) ?? new Settings();
+		TemporarySettingsData.Id = NewSetting.Id;
+		TemporarySettingsData.NameSettings = NewSetting.NameSettings;
+		TemporarySettingsData.Value = NewSetting.Value;
+		TemporarySettingsData.IsVisible = NewSetting.IsVisible;
+		TemporarySettingsData.Setting = NewSetting.Setting;
+	}
+
+	private void CancellationNewSetting() => TemporarySettingsData = new TemporarySettingsDataModel();
+}
+
+@code {
+	Confirmation? confirmation;
+	private Settings? SettingToBeDelete { get; set; }
+	private async Task OnConfirm()
+	{
+		if (SettingToBeDelete is not null)
+		{
+			await Repository.DeleteSettingsAsync(SettingToBeDelete);
+			confirmation?.Hide();
+			PopupNotification.CreateNotification("Удаление записи", "Удалена настройка",
+				SettingToBeDelete.NameSettings);
+			SettingToBeDelete = null;
+			CancellationNewSetting();
+			await UpdateDataAsync();
+		}
+	}
+
+	private void OnCancel()
+	{
+		confirmation?.Hide();
+		if (SettingToBeDelete is null) return;
+		PopupNotification.CreateNotification("Отмена удаления", "Отменено удаление настройки", 
+			SettingToBeDelete.NameSettings);
+		SettingToBeDelete = null;
+	}
+}
+
+@code {
+	public class TemporarySettingsDataModel
+	{
+		public int Id { get; set; }
+
+		[Required(ErrorMessage = "Пожалуйста, введите название")]
+		public string NameSettings { get; set; } = null!;
+
+		[Required(ErrorMessage = "Пожалуйста, укажите информацию")]
+		public string Value { get; set; } = null!;
+		
+		public bool IsVisible { get; set; }
+		public TypeSettings Setting { get; set; }
+	}
+}
+

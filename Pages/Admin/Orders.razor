@@ -1,0 +1,83 @@
+@page "/admin/orders"
+@inherits OwningComponentBase<IOrderRepository>
+
+@if (loading)
+{
+	<div class="lds-spinner">
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+</div>
+}
+else
+{
+	<OrderTable StyleTable="bg-warning" TableTitle="Новые заказы" Orders="UnshippedOrders" GetOrders="UnshippedOrders"
+	ButtonLabel="Ожидает выполнения" OrderSelected="ShipOrder" />
+	<OrderTable StyleTable="bg-success" TableTitle="Выполненые заказы" Orders="ShippedOrders" GetOrders="ShippedOrders"
+	ButtonLabel="Выполнен" OrderSelected="ResetOrder" />
+}
+
+
+<button class="btn btn-info text-white" @onclick="@(e => UpdateData())">Обновить данные</button>
+
+@code {
+	public IOrderRepository Repository => Service;
+	public IEnumerable<Order> AllOrders { get; set; } = Enumerable.Empty<Order>();
+	public IEnumerable<Order> UnshippedOrders { get; set; } = Enumerable.Empty<Order>();
+	public IEnumerable<Order> ShippedOrders { get; set; } = Enumerable.Empty<Order>();
+
+	private bool loading = false;
+	protected async override Task OnInitializedAsync()
+	{
+		try
+		{
+			loading = true;
+			await UpdateData();
+			loading = false;
+		}
+		catch (InvalidOperationException ex)
+		{
+			Console.WriteLine("Исключение InvalidOperationException Orders: " + ex.Message);
+			loading = true;
+			await UpdateData();
+			loading = false;
+		}
+
+	}
+
+	public async Task UpdateData()
+	{
+		AllOrders = await GetOrders();
+		UnshippedOrders = AllOrders.Where(o => !o.Shipped);
+		ShippedOrders = AllOrders.Where(o => o.Shipped);
+	}
+
+	private async Task<List<Order>> GetOrders()
+	{
+		var result = await Repository.Orders.ToListAsync();
+		return result;
+	}
+
+	public async Task ShipOrder(int id) => await UpdateOrder(id, true);
+
+	public async Task ResetOrder(int id) => await UpdateOrder(id, false);
+
+	private async Task UpdateOrder(int id, bool shipValue)
+	{
+		Order? o = await Repository.Orders.FirstOrDefaultAsync(o => o.OrderID == id);
+		if (o != null)
+		{
+			o.Shipped = shipValue;
+			Repository.SaveOrder(o);
+		}
+	}
+}

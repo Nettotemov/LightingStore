@@ -1,0 +1,180 @@
+@page "/admin/models-lights/{CurrentPage:int?}"
+@using LampStore.Models.ProductsPages
+@using LampStore.Models.LightsModels
+@using LampStore.Models.CollectionsLights
+@inherits OwningComponentBase<IModelLight>
+@inject IPopupNotification PopupNotification
+@inject IFolderManager FolderManager
+@inject IPageStateService PageStateService
+
+<Confirmation @ref="confirmation" OnCancel="OnCancel" OnConfirm="OnConfirmAsync" IsConfirm="confirmationCheckOnDelete" Title="Удаление модели...">
+	<div class="toast-body">
+		@confirmationText
+	</div>
+</Confirmation>
+<div class="admin-notification__wrapper">
+	<Popup ListNotifications="PopupNotification.ListNotifications" />
+</div>
+
+@if (loading)
+{
+	<div class="lds-spinner">
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+	<div></div>
+</div>
+}
+else
+{
+
+	<table class="table table-sm table-striped table-bordered">
+		<thead>
+		<tr>
+			<th>ID</th>
+			<th>модель</th>
+			<th>Принадлежит коллекции</th>
+			<th>Описание модели</th>
+			<th>Количество товаров</th>
+			<th>Опубликовано</th>
+			<th>Показывать на главной</th>
+			<td />
+		</tr>
+		</thead>
+		<tbody>
+		@if (PageStateService.DisplayedNodes?.Count() > 0)
+		{
+			@foreach (var m in PageStateService.DisplayedNodes.Cast<ModelLight>())
+			{
+				<tr>
+					<td>@m.Id</td>
+					<td>@m.Name</td>
+					<td>@m.CollectionModel.Name</td>
+					<td>@m.Description</td>
+					<td>@m.Products?.Select(p => p).Count()</td>
+					<td>@m.IsAvailable</td>
+					<td>@m.IsHomePage</td>
+					<td class="text-center">
+						<NavLink class="btn btn-warning btn-sm" href="@GetEditUrl(m.Id)">
+							Изменить
+						</NavLink>
+						<button class="btn btn-danger btn-sm" @onclick="@(() => DeleteCollection(m))">
+							Удалить
+						</button>
+					</td>
+				</tr>
+			}
+		}
+		else
+		{
+			<tr>
+				<td colspan="5" class="text-center">Категории, не найдены.</td>
+			</tr>
+		}
+		</tbody>
+	</table>
+	<Pagination Url="@UrlPage" />
+}
+<NavLink class="btn btn-primary" href="/admin/models-lights/create">Добавить</NavLink>
+
+@code {
+	[Parameter]
+	public int CurrentPage { get; set; } = 1;
+	
+	private const string UrlPage = "/admin/models-lights/";
+	private const string UrlPath = "wwwroot/imegs/img-models-lights/";
+	
+	private IModelLight Repository => Service;
+	private IList<ModelLight>? ModelsLightsData { get; set; }
+	public IEnumerable<CollectionLight> CollectionsModelsData { get; set; } = Enumerable.Empty<CollectionLight>();
+	private List<Product> Products { get; set; } = new();
+	private bool loading;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			loading = true;
+			await UpdateData();
+			loading = false;
+		}
+		catch (InvalidOperationException ex)
+		{
+			Console.WriteLine("Исключение InvalidOperationException Orders: " + ex.Message);
+			loading = true;
+			await UpdateData();
+			loading = false;
+		}
+	}
+
+	private async Task UpdateData()
+	{
+		ModelsLightsData = await Repository.LightsModels.ToListAsync();
+		CollectionsModelsData = await Repository.CollectionLight.ToListAsync();
+		Products = await Repository.Products.Select(p => p).ToListAsync();
+		PageStateServiceBuilder();
+	}
+	
+	private void PageStateServiceBuilder()
+	{
+		if (ModelsLightsData is null) return;
+		PageStateService.Data = ModelsLightsData.Cast<object>().ToList();
+		PageStateService.ChangePage(CurrentPage);
+	}
+
+	private bool confirmationCheckOnDelete;
+	private string confirmationText = string.Empty;
+	private void DeleteCollection(ModelLight m)
+	{
+		if (m.Products?.Count() > 0)
+		{
+			confirmationCheckOnDelete = false;
+			confirmationText = $"В модели {m.Name} есть товары, удаление невозможно. Перенести товары из данной коллекции и повторите попытку.";
+		}
+		else
+		{
+			confirmationCheckOnDelete = true;
+			confirmationText = $"Вы уверены что хотите удалить модель {m.Name}?";
+		}
+		ModelLightToBeDelete = m;
+		confirmation?.Show();
+	}
+
+	private string GetEditUrl(long id) => $"/admin/models-lights/edit/{id}";
+}
+
+@code {
+	Confirmation? confirmation;
+	private ModelLight? ModelLightToBeDelete { get; set; }
+
+	private async Task OnConfirmAsync()
+	{
+		if (ModelLightToBeDelete != null)
+		{
+			FolderManager.DeleteDirectory(UrlPath + ModelLightToBeDelete.Id);
+			await Repository.DeleteModelLightAsync(ModelLightToBeDelete);
+			confirmation?.Hide();
+			PopupNotification.CreateNotification("Удаление коллекции", "Удалена модели",
+				ModelLightToBeDelete.Name);
+			ModelLightToBeDelete = null;
+			await UpdateData();
+		}
+	}
+
+	private void OnCancel()
+	{
+		if (ModelLightToBeDelete is null) return;
+		confirmation?.Hide();
+		PopupNotification.CreateNotification("Отмена удаления", "Отменено удаление модели",
+			ModelLightToBeDelete.Name);
+		ModelLightToBeDelete = null;
+	}
+}
